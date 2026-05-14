@@ -9,7 +9,6 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{overflow-x:hidden;max-width:100vw}
-html,body{overflow-x:hidden;max-width:100vw}
 :root{
   --bg:#0c0a09;--bg2:#1c1917;--bg3:#292524;--border:#292524;--border2:#44403c;
   --txt:#e7e5e4;--txt2:#a8a29e;--txt3:#78716c;--txt4:#57534e;
@@ -18,7 +17,7 @@ html,body{overflow-x:hidden;max-width:100vw}
 }
 body{background:var(--bg);color:var(--txt);font-family:'Courier New',monospace;min-height:100vh;display:flex}
 a{color:inherit}
-button{cursor:pointer;border:none;background:none;color:inherit;font-family:inherit}
+button{cursor:pointer;border:none;background:none;color:inherit;font-family:inherit;touch-action:manipulation}
 input,select,textarea{font-family:inherit;color:inherit}
 input:focus,select:focus{outline:none}
 
@@ -88,7 +87,7 @@ td.r{text-align:right}
 td.c{text-align:center}
 tr:hover td{background:rgba(41,37,36,.3)}
 tr.alert-empty td{background:rgba(127,29,29,.07)}
-tr.alert-low td{background:rgba(120,53,15,.07)}
+tr.alert-low td{background:rgba(194,65,12,.13);}
 tfoot td{padding:10px 14px;font-size:11px;border-top:2px solid var(--border2);background:rgba(28,25,23,.6)}
 .tbl-header{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 
@@ -258,6 +257,7 @@ tfoot td{padding:10px 14px;font-size:11px;border-top:2px solid var(--border2);ba
 }
 @media(max-width:1100px){
   .col-pcarta{display:none}
+  .col-calice{display:none}
   .col-soglia{display:none}
 }
 @media(max-width:900px){
@@ -670,7 +670,7 @@ async function _sbUpsert(table, payload){
 }
 async function _sbRead(table){
   if(!_sb) return null;
-  const { data, error } = await _sb.from(table).select("data").eq("user_id", DB_USER).single();
+  const { data, error } = await _sb.from(table).select("data").eq("user_id", DB_USER).maybeSingle();
   if(error) return null;
   return data?.data ?? null;
 }
@@ -1038,7 +1038,7 @@ function renderInventario(){
         <thead><tr>
           ${selMode==='wines'?`<th class="cb-col"><input type="checkbox" id="cb-sel-all" class="cb-sel" onchange="toggleSelAll()"></th>`:''}
           <th class="col-fornitore" style="color:var(--txt3)">Fornitore</th><th>Produttore</th><th>Nome Vino</th><th>Tipo</th><th class="col-vitigni" style="color:var(--txt3)">Vitigni</th>
-          <th class="r" style="border-left:1px solid var(--border)">P.Acq</th><th class="r col-ivaincl">+IVA/bt</th><th class="r col-pcarta">P.Carta</th><th class="r col-margperc">Marg.%</th>
+          <th class="r" style="border-left:1px solid var(--border)">P.Acq</th><th class="r col-ivaincl">+IVA/bt</th><th class="r col-pcarta">P.Carta</th><th class="r col-calice">P.Calice</th><th class="r col-margperc">Marg.%</th>
           <th class="c" style="border-left:1px solid rgba(120,53,15,.4);background:rgba(120,53,15,.1);color:var(--amber3)">GIACENZA</th>
           <th class="c col-soglia" style="background:rgba(120,53,15,.07)">Soglia</th>
           <th class="r col-valcosto" style="border-left:1px solid var(--border)">Val.Costo</th><th class="r col-valcarta">Val.Carta</th>
@@ -1060,7 +1060,7 @@ function renderInventario(){
             <td class="col-vitigni" style="color:var(--txt3);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">${h(w.vitigni||"—")}</td>
             <td class="r" style="border-left:1px solid var(--border)">${fmt(w.prezzoAcq)}</td>
             <td class="r col-ivaincl" style="color:var(--txt3)">${fmt(calcCostoIvaBottiglia(w))}</td>
-            <td class="r col-pcarta" style="${!w.prezzoCarta?'color:var(--txt4)':''}">${w.prezzoCarta?fmt(w.prezzoCarta):'—'}</td>
+            <td class="r col-pcarta" style="${!w.prezzoCarta?'color:var(--txt4)':''}">${w.prezzoCarta?fmt(w.prezzoCarta):'—'}</td><td class="r col-calice" style="${!w.prezzoCalice?'color:var(--txt4)':''}">${w.prezzoCalice?fmt(w.prezzoCalice):'—'}</td>
             <td class="r col-margperc"><span style="color:${mpColor}">${mp===null?"—":`${fmtN(mp,1)}%`}</span></td>
             <td class="c" style="border-left:1px solid rgba(120,53,15,.3);background:rgba(120,53,15,.07)">
               <div style="color:${isEmpty?"#f87171":isAlert?"#fb923c":"#fcd34d"}" class="giacenza-big">${w.giacenza}</div>
@@ -1080,7 +1080,8 @@ function renderInventario(){
             <td>
               <div style="display:flex;gap:6px">
                 <button style="color:var(--txt3);font-size:12px" onclick="openWineModal('${w.id}')" title="Modifica">✏️</button>
-                <button style="color:var(--txt3);font-size:12px" onclick="deleteWine('${w.id}')" title="Elimina">🗑️</button>
+                <button style="color:\${w.noteVeloce?'#fcd34d':'var(--txt3)'};font-size:12px" onclick="openNoteVeloce('\${w.id}')" title="\${h(w.noteVeloce||'Nota...')}" >📝</button>
+                <button style="color:var(--txt3);font-size:12px" onclick="deleteWine('\${w.id}')" title="Elimina">🗑️</button>
               </div>
             </td>
           </tr>`;
@@ -2953,7 +2954,10 @@ function renderExport(){
   let html=`<div class="card card-amber" style="margin-bottom:20px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px">
       <div><div style="font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--txt2);margin-bottom:4px">💾 Bilancio di Magazzino</div><div style="font-family:Georgia,serif;font-weight:300;font-size:1.3rem;color:#fef3c7">Situazione al ${dateStr}</div></div>
-      <button class="btn-primary" onclick="exportBilancioCSV()">↓ Esporta Bilancio Completo</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn-outline btn-sm" onclick="exportBackupJSON()" title="Backup completo di tutti i dati">💾 Backup JSON</button>
+        <button class="btn-primary" onclick="exportBilancioCSV()">↓ Esporta Bilancio Completo</button>
+      </div>
     </div>
     <div class="bilancio-grid">
       ${["Voce","Qtà","Imponibile","IVA","Totale IVA incl."].map(hd=>`<div class="bilancio-cell bilancio-header">${hd}</div>`).join("")}
@@ -3023,7 +3027,7 @@ function closeWineModal(e){
   document.getElementById("wine-modal-backdrop").classList.add("hidden");
 }
 function renderModalBody(wine){
-  const f=wine||{nome:"",produttore:"",distributore:"",annata:"",vitigni:"",tipologia:"Rosso",regione:"",nazione:"Italia",zona:"",prezzoAcq:"",iva:22,prezzoCarta:"",giacenza:0};
+  const f=wine||{nome:"",produttore:"",distributore:"",annata:"",vitigni:"",tipologia:"Rosso",regione:"",nazione:"Italia",zona:"",prezzoAcq:"",iva:22,prezzoCarta:"",prezzoCalice:"",giacenza:0};
   const lotsHtml=wine?.lots?.length?`
     <div style="margin-top:4px">
       <div class="modal-section-label">📦 Storico Lotti (FIFO)</div>
@@ -3065,6 +3069,7 @@ function renderModalBody(wine){
       <div class="form-grid g2">
         <div><label class="form-label">Prezzo Acquisto (escl. IVA) €</label><input class="form-input" id="mf-prezzoAcq" type="number" value="${f.prezzoAcq}" placeholder="0.00" oninput="updateModalCalc()"></div>
         <div><label class="form-label">IVA %</label><select class="form-select" id="mf-iva" onchange="updateModalCalc()">${IVA_OPTIONS.map(v=>`<option value="${v}" ${parseInt(f.iva)===v?"selected":""}>${v}%</option>`).join("")}</select></div>
+        <div><label class="form-label">Prezzo Calice € <span style="color:var(--txt4);font-size:9px;text-transform:none;letter-spacing:0">— opzionale</span></label><input class="form-input" id="mf-prezzoCalice" type="number" value="${f.prezzoCalice||''}" placeholder="0.00" step="0.01"></div>
         <div><label class="form-label">Prezzo in Carta €</label><input class="form-input" id="mf-prezzoCarta" type="number" value="${f.prezzoCarta}" placeholder="0.00" oninput="document.getElementById('mf-prezzoCarta')._userEdited=true;updateModalCalc()">
           <div id="mc-carta-hint" style="display:none;align-items:center;gap:8px;margin-top:5px;padding:5px 8px;background:rgba(120,53,15,.15);border:1px solid rgba(120,53,15,.3);font-size:10px;color:var(--txt3)">
             <span>Suggerito (×2+IVA):</span><span class="mc-carta-val" style="color:var(--amber);font-family:Georgia,serif"></span>
@@ -3153,13 +3158,13 @@ function applyCartaSuggerita(){
 }
 function saveWine(){
   const get=id=>document.getElementById(id)?.value||"";
-  const wine={
+  let wine={
     id:modalWine?.id||uid(),
     nome:get("mf-nome").trim(),produttore:get("mf-produttore").trim(),distributore:get("mf-distributore"),
     annata:get("mf-annata"),vitigni:get("mf-vitigni"),tipologia:get("mf-tipologia"),
     regione:get("mf-regione"),nazione:get("mf-nazione"),zona:get("mf-zona"),
     prezzoAcq:parseFloat(get("mf-prezzoAcq"))||0,iva:parseInt(get("mf-iva"))||22,
-    prezzoCarta:parseFloat(get("mf-prezzoCarta"))||0,giacenza:parseInt(get("mf-giacenza"))||0,
+    prezzoCarta:parseFloat(get("mf-prezzoCarta"))||0,prezzoCalice:parseFloat(get("mf-prezzoCalice"))||0,giacenza:parseInt(get("mf-giacenza"))||0,
     lots:modalWine?.lots||[]
   };
   if(!wine.nome||!wine.produttore) return;
@@ -3353,8 +3358,8 @@ function toCSV(rows){return rows.map(r=>r.map(v=>esc(v)).join(";")).join("\n")}
 
 function exportInventarioCSV(){
   const dateStr=new Date().toLocaleDateString("it-IT");
-  const headers=["Distributore","Produttore","Nome Vino","Vitigni","Annata","Zona/Cru","Regione","Tipologia","P.Acq (escl.IVA)","IVA %","Costo+IVA/bt","P.Carta","Marg.Lordo/bt","Marg.%","Giacenza","Val.Costo","IVA su Stock","Val.Potenziale Carta"];
-  const rows=wines.map(w=>{const mb=calcMargineBottiglia(w);const mp=calcMarginePerc(w);const vc=calcValore(w);return [w.distributore||"",w.produttore,w.nome,w.vitigni||"",w.annata||"",w.zona||"",w.regione||"",w.tipologia,fmtN(w.prezzoAcq),w.iva+"%",fmtN(calcCostoIvaBottiglia(w)),fmtN(w.prezzoCarta),mb!==null?fmtN(mb):"—",mp!==null?fmtN(mp,1)+"%":"—",w.giacenza,fmtN(vc),fmtN(vc*(parseInt(w.iva)||22)/100),fmtN(calcValoreCarta(w))];});
+  const headers=["Distributore","Produttore","Nome Vino","Vitigni","Annata","Zona/Cru","Regione","Tipologia","P.Acq (escl.IVA)","IVA %","Costo+IVA/bt","P.Carta","P.Calice","Marg.Lordo/bt","Marg.%","Giacenza","Val.Costo","IVA su Stock","Val.Potenziale Carta"];
+  const rows=wines.map(w=>{const mb=calcMargineBottiglia(w);const mp=calcMarginePerc(w);const vc=calcValore(w);return [w.distributore||"",w.produttore,w.nome,w.vitigni||"",w.annata||"",w.zona||"",w.regione||"",w.tipologia,fmtN(w.prezzoAcq),w.iva+"%",fmtN(calcCostoIvaBottiglia(w)),fmtN(w.prezzoCarta),w.prezzoCalice?fmtN(w.prezzoCalice):"—",mb!==null?fmtN(mb):"—",mp!==null?fmtN(mp,1)+"%":"—",w.giacenza,fmtN(vc),fmtN(vc*(parseInt(w.iva)||22)/100),fmtN(calcValoreCarta(w))];});
   dlCSV(toCSV([headers,...rows]),`giacenze_al_${dateStr.replace(/\//g,"-")}.csv`);
   notify("📥 Giacenze esportate");
 }
@@ -3739,8 +3744,8 @@ function exportBilancioCSV(){
   lines.push(row("Valore potenziale di vendita (carta)","",fmtN(s.valoreCarta),"",fmtN(s.valoreCarta)));
   lines.push(""); lines.push("");
   lines.push(row("B — GIACENZE AL "+dateStr));
-  lines.push(row("Produttore","Nome Vino","Tipologia","Annata","P.Acq","IVA%","Giacenza","Val.Costo","IVA Stock","Val.Carta"));
-  wines.forEach(w=>{const vc=calcValore(w);lines.push(row(w.produttore,w.nome,w.tipologia,w.annata||"",fmtN(w.prezzoAcq),w.iva+"%",w.giacenza,fmtN(vc),fmtN(vc*(parseInt(w.iva)||22)/100),fmtN(calcValoreCarta(w))));});
+  lines.push(row("Produttore","Nome Vino","Tipologia","Annata","P.Acq","IVA%","P.Carta","P.Calice","Giacenza","Val.Costo","IVA Stock","Val.Carta"));
+  wines.forEach(w=>{const vc=calcValore(w);lines.push(row(w.produttore,w.nome,w.tipologia,w.annata||"",fmtN(w.prezzoAcq),w.iva+"%",fmtN(w.prezzoCarta),w.prezzoCalice?fmtN(w.prezzoCalice):"—",w.giacenza,fmtN(vc),fmtN(vc*(parseInt(w.iva)||22)/100),fmtN(calcValoreCarta(w))));});
   lines.push(row("","","","","TOTALE","",wines.reduce((s2,w)=>s2+w.giacenza,0),fmtN(totValStock),fmtN(totIvaStock),fmtN(s.valoreCarta)));
   lines.push(""); lines.push("");
   lines.push(row("C — REGISTRO ACQUISTI"));
@@ -3756,6 +3761,76 @@ function exportBilancioCSV(){
   URL.revokeObjectURL(url);
   notify("📊 Bilancio completo esportato");
 }
+
+// ─── BACKUP JSON ──────────────────────────────────────────────────────────────
+function exportBackupJSON(){
+  const dateStr = new Date().toISOString().slice(0,10);
+  const backup = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    wines,
+    movements,
+    fallate,
+    orders,
+    alertSoglie,
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  Object.assign(document.createElement("a"), {
+    href: url,
+    download: `cantina-backup-${dateStr}.json`
+  }).click();
+  URL.revokeObjectURL(url);
+  notify("💾 Backup esportato");
+}
+
+// ─── NOTE VELOCI ──────────────────────────────────────────────────────────────
+let _noteVeloceId = null;
+function openNoteVeloce(wineId){
+  const w = wines.find(x=>x.id===wineId);
+  if(!w) return;
+  _noteVeloceId = wineId;
+  document.getElementById("nv-wine-name").textContent = w.nome + (w.produttore ? ' — ' + w.produttore : '');
+  document.getElementById("nv-text").value = w.noteVeloce || '';
+  document.getElementById("note-veloce-backdrop").classList.remove("hidden");
+  setTimeout(()=>document.getElementById("nv-text").focus(), 80);
+}
+function closeNoteVeloce(e){
+  if(e && e.target !== document.getElementById("note-veloce-backdrop")) return;
+  document.getElementById("note-veloce-backdrop").classList.add("hidden");
+  _noteVeloceId = null;
+}
+function saveNoteVeloce(){
+  if(!_noteVeloceId) return;
+  const nota = document.getElementById("nv-text").value.trim();
+  wines = wines.map(w => w.id===_noteVeloceId ? {...w, noteVeloce: nota} : w);
+  document.getElementById("note-veloce-backdrop").classList.add("hidden");
+  _noteVeloceId = null;
+  scheduleSave();
+  notify("📝 Nota salvata");
+  render();
+}
 </script>
+
+<!-- NOTE VELOCE MODAL -->
+<div class="modal-backdrop hidden" id="note-veloce-backdrop" onclick="closeNoteVeloce(event)">
+  <div class="modal" style="max-width:420px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>📝 Nota veloce</h2>
+      <button style="font-size:18px;color:var(--txt3)" onclick="closeNoteVeloce()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="nv-wine-name" style="font-family:Georgia,serif;font-size:1rem;color:#fef3c7;margin-bottom:14px"></div>
+      <label class="form-label">Nota</label>
+      <textarea id="nv-text" class="form-input" rows="4" style="resize:vertical" placeholder="es. Da proporre agli appassionati di nebbiolo, abbinare con selvaggina…"></textarea>
+      <div style="font-size:9px;color:var(--txt4);margin-top:6px;letter-spacing:.1em">Visibile nella carta vini pubblica se compilato</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-outline" onclick="closeNoteVeloce()">Annulla</button>
+      <button class="btn-primary" onclick="saveNoteVeloce()">💾 Salva nota</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
