@@ -397,7 +397,7 @@ th.cb-col,td.cb-col{width:32px;padding:6px 8px!important}
 <div id="mob-screen">
   <div id="mob-topbar">
     <div id="mob-topbar-row1">
-      <h2>🍷 Inventario Rapido</h2>
+      <h2>🍷 Inventario Rapido <span id="mob-wine-count" style="font-size:10px;color:var(--txt4);font-family:'Courier New',monospace;font-weight:normal"></span></h2>
       <div style="display:flex;align-items:center;gap:8px">
         <div id="mob-db-status"><span class="db-dot off" id="mob-db-dot"></span><span id="mob-db-label">DB</span></div>
         <button id="mob-exit-btn" onclick="exitMobileMode()">↗ Desktop</button>
@@ -701,6 +701,7 @@ async function loadData(){
   if(!_sb){
     _loadLocalBackup();
     _setDbStatus("off","Solo locale");
+    render();
     return;
   }
   _setDbStatus("sync","Caricamento…");
@@ -3423,6 +3424,8 @@ function _renderMobList(){
     return hay.includes(q);
   }).sort((a,b) => a.nome.localeCompare(b.nome));
 
+  const countEl = document.getElementById("mob-wine-count");
+  if(countEl) countEl.textContent = wines.length ? `(${filtered.length}/${wines.length})` : "";
   const list = document.getElementById("mob-list");
   const empty = document.getElementById("mob-empty");
   if(!list) return;
