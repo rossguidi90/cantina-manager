@@ -1,2 +1,2 @@
 # cantina-manager
-cantina maager Palinurobar
+cantina manager Palinurobar
