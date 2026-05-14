@@ -588,8 +588,8 @@ function _setDbStatus(state, label){
 
 function _initSupabase(){
   try{
-    const url = localStorage.getItem("cm_sb_url")||"";
-    const key = localStorage.getItem("cm_sb_key")||"";
+    const url = localStorage.getItem("cm_sb_url")||"https://bsyrxntucnsceamikjsq.supabase.co";
+    const key = localStorage.getItem("cm_sb_key")||"sb_publishable_Togro6TTbNuV88NZkaadCA__pmh3-wx";
     if(!url||!key){ _sb=null; _setDbStatus("off","Solo locale"); return false; }
     _sb = supabase.createClient(url, key);
     return true;
