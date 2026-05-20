@@ -2956,6 +2956,10 @@ function renderExport(){
       <div><div style="font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--txt2);margin-bottom:4px">💾 Bilancio di Magazzino</div><div style="font-family:Georgia,serif;font-weight:300;font-size:1.3rem;color:#fef3c7">Situazione al ${dateStr}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn-outline btn-sm" onclick="exportBackupJSON()" title="Backup completo di tutti i dati">💾 Backup JSON</button>
+        <label class="btn-outline btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);font-size:11px;letter-spacing:.04em" title="Ripristina da file JSON">
+          📥 Importa Backup
+          <input type="file" accept=".json" onchange="importBackupJSON(event)" style="display:none">
+        </label>
         <button class="btn-primary" onclick="exportBilancioCSV()">↓ Esporta Bilancio Completo</button>
       </div>
     </div>
@@ -3782,6 +3786,32 @@ function exportBackupJSON(){
   }).click();
   URL.revokeObjectURL(url);
   notify("💾 Backup esportato");
+}
+
+// ─── IMPORT BACKUP JSON ──────────────────────────────────────────────────────
+function importBackupJSON(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if(!data.wines || !Array.isArray(data.wines)) throw new Error("Formato non valido");
+      if(!confirm(`Importare ${data.wines.length} vini? I dati esistenti verranno sostituiti.`)) return;
+      wines = data.wines;
+      if(data.movements) movements = data.movements;
+      if(data.fallate) fallate = data.fallate;
+      if(data.orders) orders = data.orders;
+      if(data.alertSoglie) alertSoglie = data.alertSoglie;
+      scheduleSave();
+      renderSection(currentSection);
+      notify(`✅ Importati ${wines.length} vini`);
+    } catch(err) {
+      notify("❌ Errore: " + err.message, "err");
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
 }
 
 // ─── NOTE VELOCI ──────────────────────────────────────────────────────────────
