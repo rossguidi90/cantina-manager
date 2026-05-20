@@ -440,6 +440,15 @@ th.cb-col,td.cb-col{width:32px;padding:6px 8px!important}
       </div>
       <div id="cfg-test-result" style="margin-top:12px;font-size:11px;min-height:18px"></div>
     </div>
+      <div class="form-row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+        <label class="form-label">Tipologie Vino</label>
+        <p style="font-size:10px;color:var(--txt4);margin-bottom:8px">Una per riga. Modifica, aggiungi o rimuovi liberamente.</p>
+        <textarea class="form-input" id="cfg-tipologie" rows="8" style="font-size:12px;resize:vertical;line-height:1.8"></textarea>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-outline btn-sm" onclick="saveTipologie()">✓ Salva Tipologie</button>
+        <button class="btn-outline btn-sm" onclick="resetTipologie()">↺ Ripristina Default</button>
+      </div>
     <div class="modal-footer">
       <button class="btn-outline" onclick="testDbConnection()">🔌 Test Connessione</button>
       <button class="btn-outline" onclick="closeDbConfig()">Annulla</button>
@@ -454,7 +463,24 @@ th.cb-col,td.cb-col{width:32px;padding:6px 8px!important}
 // Per cambiare password: in console > sha256("nuova") e aggiorna PASSWORD_HASH
 const PASSWORD_HASH = "c88f972b631df5806c58243303f5ecf4c868936204414ac965466e10a926bbd9";
 
-const TIPOLOGIE = ["Rosso","Bianco","Rosato","Spumante","Naturale","Dolce","Passito","Liquoroso","Orange"];
+const _TIPOLOGIE_DEFAULT = ["Rosso","Bianco","Rosato","Champagne","Metodo Classico","Metodo Classico Rosato","Rifermentato","Rifermentato Rosso","Rifermentato Rosato","Col Fondo","Ancestrale","Macerato","Orange","Passito","Dolce","Liquoroso"];
+function _saveTipologie(){try{localStorage.setItem("cm_tipologie",JSON.stringify(TIPOLOGIE));}catch{}}
+// Migra automaticamente localStorage vecchio (es. conteneva "Spumante","Naturale")
+let TIPOLOGIE = (()=>{
+  try{
+    const s = localStorage.getItem("cm_tipologie");
+    if(!s) return [..._TIPOLOGIE_DEFAULT];
+    const saved = JSON.parse(s);
+    // Se contiene vecchie tipologie o manca Champagne → reset al default
+    const hasOld = saved.includes("Spumante") || saved.includes("Naturale");
+    const missingNew = !saved.includes("Champagne") || !saved.includes("Metodo Classico");
+    if(hasOld || missingNew){
+      localStorage.setItem("cm_tipologie", JSON.stringify(_TIPOLOGIE_DEFAULT));
+      return [..._TIPOLOGIE_DEFAULT];
+    }
+    return saved;
+  }catch{return [..._TIPOLOGIE_DEFAULT];}
+})();
 const IVA_OPTIONS = [4,10,22];
 const FALLATA_MOTIVI = ["Tappo difettoso (TCA)","Bottiglia rotta","Ossidazione","Rifermentazione anomala","Vino ridotto","Deterioramento","Altro difetto"];
 const PIE_COLORS = ["#b45309","#1d4ed8","#15803d","#7c3aed","#db2777","#0891b2","#ea580c","#65a30d","#d97706"];
@@ -599,9 +625,29 @@ function _initSupabase(){
 }
 
 // ── DB CONFIG MODAL ──────────────────────────────────────────────────────────
+function saveTipologie(){
+  const val = document.getElementById("cfg-tipologie").value;
+  const arr = val.split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!arr.length) return notify("Inserisci almeno una tipologia","err");
+  TIPOLOGIE.length = 0;
+  arr.forEach(t=>TIPOLOGIE.push(t));
+  _saveTipologie();
+  notify("✓ Tipologie aggiornate");
+  render();
+}
+function resetTipologie(){
+  const def = ["Rosso","Bianco","Rosato","Champagne","Metodo Classico","Metodo Classico Rosato","Rifermentato","Rifermentato Rosso","Rifermentato Rosato","Col Fondo","Ancestrale","Macerato","Orange","Passito","Dolce","Liquoroso"];
+  TIPOLOGIE.length = 0;
+  def.forEach(t=>TIPOLOGIE.push(t));
+  _saveTipologie();
+  document.getElementById("cfg-tipologie").value = TIPOLOGIE.join("\n");
+  notify("✓ Tipologie ripristinate");
+  render();
+}
 function openDbConfig(){
   document.getElementById("cfg-url").value = localStorage.getItem("cm_sb_url")||"";
   document.getElementById("cfg-key").value = localStorage.getItem("cm_sb_key")||"";
+  document.getElementById("cfg-tipologie").value = TIPOLOGIE.join("\n");
   document.getElementById("cfg-test-result").textContent = "";
   document.getElementById("db-config-backdrop").classList.remove("hidden");
 }
