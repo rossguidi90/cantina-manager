@@ -754,7 +754,7 @@ async function loadData(){
   if(!_sb){
     _loadLocalBackup();
     _setDbStatus("off","Solo locale");
-    render();
+    if(_mobActive){ _renderMobList(); _renderMobLog(); } else render();
     return;
   }
   _setDbStatus("sync","Caricamento…");
@@ -771,11 +771,12 @@ async function loadData(){
     _migrateOrders();
     _saveLocalBackup(); // update local cache with remote data
     _setDbStatus("ok","Connesso");
-    render(); // re-render after async load
+    if(_mobActive){ _renderMobList(); _renderMobLog(); } else render();
   }catch(e){
     _setDbStatus("err","Errore lettura");
     notify("⚠️ DB non raggiungibile — carico backup locale","err");
     _loadLocalBackup();
+    if(_mobActive){ _renderMobList(); _renderMobLog(); } else render();
   }
 }
 
@@ -3511,6 +3512,7 @@ function _renderMobList(){
   if(filtered.length === 0){
     list.innerHTML = "";
     empty.style.display = "block";
+    empty.innerHTML = `Nessun vino trovato<br><span style="font-size:10px;color:var(--txt4)">DB: ${_sb?'connesso':'locale'} · wines: ${wines.length}</span>`;
     return;
   }
   empty.style.display = "none";
