@@ -461,26 +461,26 @@ th.cb-col,td.cb-col{width:32px;padding:6px 8px!important}
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 // Password stored as SHA-256 hash. Default: "cantina2024"
 // Per cambiare password: in console > sha256("nuova") e aggiorna PASSWORD_HASH
-const PASSWORD_HASH = "c88f972b631df5806c58243303f5ecf4c868936204414ac965466e10a926bbd9";
+const PASSWORD_HASH = "4308b16b088ef46766393f253ec3d48d96dfc04e80712cc0c55f0491c848fbad";
 
-const _TIPOLOGIE_DEFAULT = ["Rosso","Bianco","Rosato","Champagne","Metodo Classico","Metodo Classico Rosato","Rifermentato","Rifermentato Rosso","Rifermentato Rosato","Col Fondo","Ancestrale","Macerato","Orange","Passito","Dolce","Liquoroso"];
+let TIPOLOGIE = (()=>{try{const s=localStorage.getItem("cm_tipologie");return s?JSON.parse(s):["Rosso","Bianco","Rosato","Champagne","Metodo Classico","Metodo Classico Rosato","Rifermentato","Rifermentato Rosso","Rifermentato Rosato","Col Fondo","Ancestrale","Macerato","Orange","Passito","Dolce","Liquoroso"];}catch{return ["Rosso","Bianco","Rosato","Champagne","Metodo Classico","Metodo Classico Rosato","Rifermentato","Rifermentato Rosso","Rifermentato Rosato","Col Fondo","Ancestrale","Macerato","Orange","Passito","Dolce","Liquoroso"];}})();
 function _saveTipologie(){try{localStorage.setItem("cm_tipologie",JSON.stringify(TIPOLOGIE));}catch{}}
-// Migra automaticamente localStorage vecchio (es. conteneva "Spumante","Naturale")
-let TIPOLOGIE = (()=>{
-  try{
-    const s = localStorage.getItem("cm_tipologie");
-    if(!s) return [..._TIPOLOGIE_DEFAULT];
-    const saved = JSON.parse(s);
-    // Se contiene vecchie tipologie o manca Champagne → reset al default
-    const hasOld = saved.includes("Spumante") || saved.includes("Naturale");
-    const missingNew = !saved.includes("Champagne") || !saved.includes("Metodo Classico");
-    if(hasOld || missingNew){
-      localStorage.setItem("cm_tipologie", JSON.stringify(_TIPOLOGIE_DEFAULT));
-      return [..._TIPOLOGIE_DEFAULT];
-    }
-    return saved;
-  }catch{return [..._TIPOLOGIE_DEFAULT];}
-})();
+function _tipoOptsHtml(selected){
+  return TIPOLOGIE.map(t=>`<option value="${h(t)}"${t===selected?" selected":""}>${h(t)}</option>`).join("")
+    + `<option value="__new__">+ Nuova tipologia…</option>`;
+}
+function _addTipologiaInline(sel, onNewTipo){
+  if(sel.value !== "__new__") return;
+  const nuova = (prompt("Nome nuova tipologia:") || "").trim();
+  if(!nuova){ sel.value = sel.dataset.prev || TIPOLOGIE[0]; return; }
+  if(!TIPOLOGIE.includes(nuova)){ TIPOLOGIE.push(nuova); _saveTipologie(); }
+  const newOpt = document.createElement("option");
+  newOpt.value = nuova; newOpt.textContent = nuova;
+  sel.insertBefore(newOpt, sel.querySelector('option[value="__new__"]'));
+  sel.value = nuova;
+  sel.dataset.prev = nuova;
+  if(onNewTipo) onNewTipo(nuova);
+}
 const IVA_OPTIONS = [4,10,22];
 const FALLATA_MOTIVI = ["Tappo difettoso (TCA)","Bottiglia rotta","Ossidazione","Rifermentazione anomala","Vino ridotto","Deterioramento","Altro difetto"];
 const PIE_COLORS = ["#b45309","#1d4ed8","#15803d","#7c3aed","#db2777","#0891b2","#ea580c","#65a30d","#d97706"];
@@ -497,6 +497,11 @@ let modalWine = null;
 let notifTimer = null;
 
 // ─── MULTI-SELECT STATE ───────────────────────────────────────────────────────
+let _mobQuery = "";
+let _mobLog = []; // [{ts, desc}]
+let _mobUndoData = null; // {wineId, delta, movId, prevGiacenza, prevLots}
+let _mobToastTimer = null;
+let _mobToastBarTimer = null;
 let selMode = null; // 'wines' | 'movimenti' | 'ordini'
 let selIds  = new Set();
 let _selAllIds = []; // IDs di tutte le righe visibili, aggiornato dal render
@@ -616,8 +621,8 @@ function _setDbStatus(state, label){
 
 function _initSupabase(){
   try{
-    const url = localStorage.getItem("cm_sb_url")||"https://bsyrxntucnsceamikjsq.supabase.co";
-    const key = localStorage.getItem("cm_sb_key")||"sb_publishable_Togro6TTbNuV88NZkaadCA__pmh3-wx";
+    const url = localStorage.getItem("cm_sb_url")||"https://aznqjmhzbehpmvxnxbzs.supabase.co";
+    const key = localStorage.getItem("cm_sb_key")||"sb_publishable_rIotpoh2POip1IY7NDnOAA_sAvDapzh";
     if(!url||!key){ _sb=null; _setDbStatus("off","Solo locale"); return false; }
     _sb = supabase.createClient(url, key);
     return true;
@@ -1407,10 +1412,10 @@ function renderMovimenti(){
       <div class="form-grid g2" style="margin-bottom:8px">
         <div>
           <label class="form-label">Tipologia${!selW&&movForm._wineText&&!movForm.wineId?' <span style="color:var(--amber3)">*</span>':''}</label>
-          <select class="form-select" onchange="_movTipologiaChange(this.value)">
+          <select class="form-select" data-prev="Rosso" onchange="_addTipologiaInline(this,(v)=>_movTipologiaChange(v));if(this.value!=='__new__'){this.dataset.prev=this.value;_movTipologiaChange(this.value)}">
             ${selW
-              ? TIPOLOGIE.map(t=>`<option value="${t}"${selW.tipologia===t?' selected':''}>${t}</option>`).join('')
-              : TIPOLOGIE.map(t=>`<option value="${t}"${(movForm._newTipologia||'Rosso')===t?' selected':''}>${t}</option>`).join('')}
+              ? _tipoOptsHtml(selW.tipologia)
+              : _tipoOptsHtml(movForm._newTipologia||'Rosso')}
             ${selW&&!TIPOLOGIE.includes(selW.tipologia)?`<option value="${h(selW.tipologia)}" selected>${h(selW.tipologia)}</option>`:''}
           </select>
           ${selW?`<div style="margin-top:4px;font-size:10px;color:var(--txt3)">${selW.annata||'N.V.'} · ${selW.giacenza} bt disponibili</div>`:''}
@@ -1548,7 +1553,7 @@ function registraMovimento(){
     const newWine={
       id:uid(), nome:nomeTrimmed, produttore:prodTrimmed,
       distributore:fornitore||"", annata:"", vitigni:"", tipologia:movForm._newTipologia||"Rosso",
-      regione:"", nazione:"Italia", zona:"",
+      regione:"", nazione:r.nazione||"Italia", zona:r.zona||"",
       prezzoAcq:parseFloat(prezzoAcqLotto)||0, iva:22,
       prezzoCarta:parseFloat(movForm._newPrezzoCarta)||0,
       giacenza:0, lots:[]
@@ -2314,7 +2319,7 @@ function apriOrdineEvasoModal(id){
   _editOrdineEvasoId = id;
 
   const allFornitori=[...new Set([...wines.map(w=>w.distributore),...orders.map(x=>x.fornitore)].filter(Boolean))].sort();
-  const TIPOLOGIE_OPTS = TIPOLOGIE.map(t=>`<option value="${h(t)}">${h(t)}</option>`).join("");
+  const TIPOLOGIE_OPTS = _tipoOptsHtml("");
   const IVA_OPTS = IVA_OPTIONS.map(v=>`<option value="${v}">${v}%</option>`).join("");
 
   const refsHtml = (o.referenze||[]).map((r,i)=>`
@@ -2322,7 +2327,7 @@ function apriOrdineEvasoModal(id){
       <td style="padding:5px 8px"><input class="form-input" style="font-size:11px" value="${h(r.produttore||'')}" placeholder="Produttore"></td>
       <td style="padding:5px 8px"><input class="form-input" style="font-size:11px" value="${h(r.nomeVino||'')}" placeholder="Nome vino"></td>
       <td style="padding:5px 8px"><input class="form-input" style="font-size:11px;width:80px" value="${h(r.annata||'')}" placeholder="Anno"></td>
-      <td style="padding:5px 8px"><select class="form-select" style="font-size:11px">${TIPOLOGIE.map(t=>`<option value="${t}"${r.tipologia===t?" selected":""}>${t}</option>`).join("")}</select></td>
+      <td style="padding:5px 8px"><select class="form-select" style="font-size:11px" data-prev="${h(r.tipologia)}" onchange="_addTipologiaInline(this);if(this.value!=='__new__')this.dataset.prev=this.value">${_tipoOptsHtml(r.tipologia)}</select></td>
       <td style="padding:5px 8px;text-align:center"><input type="number" class="form-input" style="font-size:11px;width:60px;text-align:center" value="${r.qty||0}" min="0"></td>
       <td style="padding:5px 8px;text-align:center"><input type="number" class="form-input" style="font-size:11px;width:60px;text-align:center" value="${r.qtyArr??r.qty??0}" min="0"></td>
       <td style="padding:5px 8px"><input type="number" class="form-input" style="font-size:11px;width:80px" value="${r.prezzoAcq||''}" step="0.01" min="0" placeholder="0.00"></td>
@@ -2387,7 +2392,7 @@ function _addEvasoRefRow(){
       <td style="padding:5px 8px"><input class="form-input" style="font-size:11px" value="" placeholder="Produttore"></td>
       <td style="padding:5px 8px"><input class="form-input" style="font-size:11px" value="" placeholder="Nome vino"></td>
       <td style="padding:5px 8px"><input class="form-input" style="font-size:11px;width:80px" value="" placeholder="Anno"></td>
-      <td style="padding:5px 8px"><select class="form-select" style="font-size:11px">${TIPOLOGIE.map(t=>`<option value="${t}">${t}</option>`).join("")}</select></td>
+      <td style="padding:5px 8px"><select class="form-select" style="font-size:11px" data-prev="Rosso" onchange="_addTipologiaInline(this);if(this.value!=='__new__')this.dataset.prev=this.value">${_tipoOptsHtml("")}</select></td>
       <td style="padding:5px 8px;text-align:center"><input type="number" class="form-input" style="font-size:11px;width:60px;text-align:center" value="0" min="0"></td>
       <td style="padding:5px 8px;text-align:center"><input type="number" class="form-input" style="font-size:11px;width:60px;text-align:center" value="0" min="0"></td>
       <td style="padding:5px 8px"><input type="number" class="form-input" style="font-size:11px;width:80px" value="" step="0.01" min="0" placeholder="0.00"></td>
@@ -2465,20 +2470,22 @@ function apriOrdineModal(idOrNull){
   document.getElementById("ordine-modal-backdrop").classList.remove("hidden");
 }
 
-function _newRef(produttore="",nomeVino="",annata="",tipologia="Rosso",prezzoAcq="",iva=22,qty=6){
-  return {id:uid(),produttore,nomeVino,annata,tipologia,prezzoAcq,iva,qty};
+function _newRef(produttore="",nomeVino="",annata="",tipologia="Rosso",prezzoAcq="",iva=22,qty=6,regione="",zona="",nazione="Italia",prezzoCarta=""){
+  return {id:uid(),produttore,nomeVino,annata,tipologia,prezzoAcq,iva,qty,regione,zona,nazione,prezzoCarta};
 }
 
 function _renderOrdineModalBody(allFornitori, allProduttori, allNomi){
-  const tipoOpts=TIPOLOGIE.map(t=>`<option value="${h(t)}">${h(t)}</option>`).join("");
+  const tipoOpts=_tipoOptsHtml("");
   const ivaOpts=IVA_OPTIONS.map(v=>`<option value="${v}">${v}%</option>`).join("");
 
+  const allRegioni=[...new Set(wines.map(w=>w.regione).filter(Boolean))].sort();
   let refsHtml=ordineModalData.referenze.map((r,i)=>_refRowHtml(r,i,tipoOpts,ivaOpts,allProduttori,allNomi)).join("");
 
   document.getElementById("ordine-modal-body").innerHTML=`
     <datalist id="omd-forn-dl">${allFornitori.map(v=>`<option value="${h(v)}">`).join("")}</datalist>
     <datalist id="omd-prod-dl">${allProduttori.map(v=>`<option value="${h(v)}">`).join("")}</datalist>
     <datalist id="omd-wine-dl">${allNomi.map(v=>`<option value="${h(v)}">`).join("")}</datalist>
+    <datalist id="omd-reg-dl">${allRegioni.map(v=>`<option value="${h(v)}">`).join("")}</datalist>
     <!-- Header ordine -->
     <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:12px;margin-bottom:20px">
       <div>
@@ -2497,19 +2504,23 @@ function _renderOrdineModalBody(allFornitori, allProduttori, allNomi){
     <!-- Referenze -->
     <div class="modal-section-label">🍾 Referenze dell'ordine</div>
     <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;min-width:680px">
+      <table style="width:100%;border-collapse:collapse;min-width:1050px">
         <thead>
           <tr style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--txt4)">
-            <td style="padding:6px 8px;width:15%">Produttore</td>
-            <td style="padding:6px 8px;width:15%">Nome Vino</td>
-            <td style="padding:6px 8px;width:13%">Vitigni</td>
-            <td style="padding:6px 8px;width:6%">Annata</td>
-            <td style="padding:6px 8px;width:10%">Tipologia</td>
-            <td style="padding:6px 8px;width:11%">P.Acq ex IVA</td>
-            <td style="padding:6px 8px;width:7%">IVA</td>
-            <td style="padding:6px 8px;width:11%">P.Acq+IVA</td>
-            <td style="padding:6px 8px;width:8%">Qty</td>
-            <td style="padding:6px 8px;width:10%"></td>
+            <td style="padding:6px 8px;width:11%">Produttore</td>
+            <td style="padding:6px 8px;width:11%">Nome Vino</td>
+            <td style="padding:6px 8px;width:8%">Vitigni</td>
+            <td style="padding:6px 8px;width:4%">Annata</td>
+            <td style="padding:6px 8px;width:7%">Tipologia</td>
+            <td style="padding:6px 8px;width:8%">Regione</td>
+            <td style="padding:6px 8px;width:7%">Zona</td>
+            <td style="padding:6px 8px;width:6%">Stato</td>
+            <td style="padding:6px 8px;width:8%">P.Acq ex IVA</td>
+            <td style="padding:6px 8px;width:5%">IVA</td>
+            <td style="padding:6px 8px;width:7%">P.Acq+IVA</td>
+            <td style="padding:6px 8px;width:7%">P.Carta</td>
+            <td style="padding:6px 8px;width:5%">Qty</td>
+            <td style="padding:6px 8px;width:5%"></td>
           </tr>
         </thead>
         <tbody id="omd-refs-body">${refsHtml}</tbody>
@@ -2521,7 +2532,7 @@ function _renderOrdineModalBody(allFornitori, allProduttori, allNomi){
 }
 
 function _refRowHtml(r,i,tipoOpts,ivaOpts,allProduttori,allNomi){
-  const selTipo=TIPOLOGIE.map(t=>`<option value="${h(t)}"${t===r.tipologia?" selected":""}>${h(t)}</option>`).join("");
+  const selTipo=_tipoOptsHtml(r.tipologia);
   const selIva=IVA_OPTIONS.map(v=>`<option value="${v}"${v===r.iva?" selected":""}>${v}%</option>`).join("");
   const ivaIncl = r.prezzoAcq ? (parseFloat(r.prezzoAcq)*(1+(parseInt(r.iva)||22)/100)) : 0;
   return `<tr data-ref-id="${r.id}" style="border-top:1px solid var(--border)">
@@ -2529,14 +2540,19 @@ function _refRowHtml(r,i,tipoOpts,ivaOpts,allProduttori,allNomi){
     <td style="padding:5px 6px"><input class="form-input" style="font-size:11px" list="omd-wine-dl" autocomplete="off" value="${h(r.nomeVino)}" placeholder="Nome vino" onchange="_refChange('${r.id}','nomeVino',this.value)" oninput="_refAutofill('${r.id}',this.value,'nomeVino')"></td>
     <td style="padding:5px 6px"><input class="form-input" style="font-size:11px" value="${h(r.vitigni||'')}" placeholder="es. Nebbiolo" onchange="_refChange('${r.id}','vitigni',this.value.trim())"></td>
     <td style="padding:5px 6px"><input class="form-input" style="font-size:11px;text-align:center" value="${h(r.annata||'')}" placeholder="es. 2021" onchange="_refChange('${r.id}','annata',this.value.trim())"></td>
-    <td style="padding:5px 6px"><select class="form-input" style="font-size:11px" onchange="_refChange('${r.id}','tipologia',this.value)">${selTipo}</select></td>
+    <td style="padding:5px 6px"><select class="form-input" style="font-size:11px" data-prev="${h(r.tipologia)}" onchange="_addTipologiaInline(this,(v)=>_refChange('${r.id}','tipologia',v));if(this.value!=='__new__'){this.dataset.prev=this.value;_refChange('${r.id}','tipologia',this.value)}">${selTipo}</select></td>
+    <td style="padding:5px 6px"><input class="form-input" style="font-size:11px" list="omd-reg-dl" autocomplete="off" value="${h(r.regione||'')}" placeholder="es. Piemonte" onchange="_refChange('${r.id}','regione',this.value.trim())"></td>
+    <td style="padding:5px 6px"><input class="form-input" style="font-size:11px" value="${h(r.zona||'')}" placeholder="es. Langhe" onchange="_refChange('${r.id}','zona',this.value.trim())"></td>
+    <td style="padding:5px 6px"><input class="form-input" style="font-size:11px" value="${h(r.nazione||'Italia')}" placeholder="es. Italia" onchange="_refChange('${r.id}','nazione',this.value.trim())"></td>
     <td style="padding:5px 6px"><input type="number" class="form-input" style="font-size:11px" value="${r.prezzoAcq||''}" step="0.01" min="0" placeholder="0.00" onchange="_refChange('${r.id}','prezzoAcq',parseFloat(this.value)||0);_updateRefIvaIncl('${r.id}')" oninput="_refChange('${r.id}','prezzoAcq',parseFloat(this.value)||0);_updateRefIvaIncl('${r.id}');_updateOrdineModalTotale()"></td>
     <td style="padding:5px 6px"><select class="form-input" style="font-size:11px" onchange="_refChange('${r.id}','iva',parseInt(this.value));_updateRefIvaIncl('${r.id}');_updateOrdineModalTotale()">${selIva}</select></td>
     <td style="padding:5px 6px;text-align:right;font-size:12px;color:var(--amber);font-weight:600;white-space:nowrap;background:rgba(120,53,15,.1);border-left:1px solid rgba(120,53,15,.3)" id="ref-ivaincl-${r.id}">${ivaIncl?fmt(ivaIncl):"—"}</td>
-    <td style="padding:5px 6px"><input type="number" class="form-input" style="font-size:12px;text-align:center;min-width:60px" value="${r.qty||6}" min="1" step="1" onchange="_refChange('${r.id}','qty',parseInt(this.value)||1)" oninput="_updateOrdineModalTotale()"></td>
+    <td style="padding:5px 6px"><input type="number" class="form-input" style="font-size:11px" value="${r.prezzoCarta||''}" step="0.5" min="0" placeholder="0.00" onchange="_refChange('${r.id}','prezzoCarta',parseFloat(this.value)||0)"></td>
+    <td style="padding:5px 6px"><input type="number" class="form-input" style="font-size:12px;text-align:center;min-width:52px" value="${r.qty||6}" min="1" step="1" onchange="_refChange('${r.id}','qty',parseInt(this.value)||1)" oninput="_updateOrdineModalTotale()"></td>
     <td style="padding:5px 6px;text-align:right"><button onclick="_removeRefRow('${r.id}')" style="color:var(--txt4);font-size:13px;background:none;border:none;cursor:pointer" title="Rimuovi">✕</button></td>
   </tr>`;
 }
+
 
 function _syncFornitoreToRefs(val){
   ordineModalData.fornitore=val;
@@ -2571,7 +2587,12 @@ function _refAutofill(refId,val,field){
       // annata
       if(found.annata){r.annata=found.annata;const inpA=row.querySelectorAll("input")[3];if(inpA)inpA.value=found.annata;}
       r.tipologia=found.tipologia;const sel=row.querySelectorAll("select")[0];if(sel){for(const o of sel.options)o.selected=o.value===found.tipologia;}
-      if(!r.prezzoAcq&&found.prezzoAcq){r.prezzoAcq=found.prezzoAcq;const inp=row.querySelectorAll("input")[4];if(inp)inp.value=found.prezzoAcq;}
+      // regione, zona, nazione
+      if(found.regione){r.regione=found.regione;const inpReg=row.querySelectorAll("input")[4];if(inpReg)inpReg.value=found.regione;}
+      if(found.zona){r.zona=found.zona;const inpZona=row.querySelectorAll("input")[5];if(inpZona)inpZona.value=found.zona;}
+      if(found.nazione){r.nazione=found.nazione;const inpNaz=row.querySelectorAll("input")[6];if(inpNaz)inpNaz.value=found.nazione;}
+      if(!r.prezzoAcq&&found.prezzoAcq){r.prezzoAcq=found.prezzoAcq;const inp=row.querySelectorAll("input[type=number]")[0];if(inp)inp.value=found.prezzoAcq;}
+      if(!r.prezzoCarta&&found.prezzoCarta){r.prezzoCarta=found.prezzoCarta;const inpPC=row.querySelectorAll("input[type=number]")[1];if(inpPC)inpPC.value=found.prezzoCarta;}
       r.iva=found.iva||22;const selIva=row.querySelectorAll("select")[1];if(selIva){for(const o of selIva.options)o.selected=parseInt(o.value)===(found.iva||22);}
     }
   }
@@ -2586,7 +2607,7 @@ function _addRefRow(){
   if(tbody){
     const r=ordineModalData.referenze[ordineModalData.referenze.length-1];
     const i=ordineModalData.referenze.length-1;
-    const tipoOpts=TIPOLOGIE.map(t=>`<option value="${h(t)}">${h(t)}</option>`).join("");
+    const tipoOpts=_tipoOptsHtml("");
     const ivaOpts=IVA_OPTIONS.map(v=>`<option value="${v}">${v}%</option>`).join("");
     const tr=document.createElement("tr");
     tr.outerHTML; // not used, just insert HTML
@@ -2596,6 +2617,9 @@ function _addRefRow(){
     if(dl) dl.innerHTML=allProd.map(v=>`<option value="${h(v)}">`).join("");
     const dlw=document.getElementById("omd-wine-dl");
     if(dlw) dlw.innerHTML=allNomi.map(v=>`<option value="${h(v)}">`).join("");
+    const dlr=document.getElementById("omd-reg-dl");
+    const allReg=[...new Set(wines.map(w=>w.regione).filter(Boolean))].sort();
+    if(dlr) dlr.innerHTML=allReg.map(v=>`<option value="${h(v)}">`).join("");
   }
   _updateOrdineModalTotale();
 }
@@ -2655,11 +2679,15 @@ function salvaOrdine(){
     const vitigni=(inps[2]?.value||"").trim();
     const annata=(inps[3]?.value||"").trim();
     const tipologia=sels[0]?.value||"Rosso";
-    const prezzoAcq=parseFloat(inps[4]?.value)||0;
+    const regione=(inps[4]?.value||"").trim();
+    const zona=(inps[5]?.value||"").trim();
+    const nazione=(inps[6]?.value||"Italia").trim();
+    const prezzoAcq=parseFloat(inps[7]?.value)||0;
     const iva=parseInt(sels[1]?.value||"22")||22;
-    const qty=parseInt(inps[5]?.value)||1;
+    const prezzoCarta=parseFloat(inps[8]?.value)||0;
+    const qty=parseInt(inps[9]?.value)||1;
     if(!nomeVino){ok=false;return;}
-    refs.push({id:refId||uid(),produttore,nomeVino,vitigni,annata,tipologia,prezzoAcq,iva,qty});
+    refs.push({id:refId||uid(),produttore,nomeVino,vitigni,annata,tipologia,regione,zona,nazione,prezzoAcq,iva,prezzoCarta,qty});
   });
   if(!ok){notify("⚠️ Inserisci il nome vino per tutte le referenze","err");return;}
   if(!refs.length){notify("⚠️ Aggiungi almeno una referenza","err");return;}
@@ -2703,7 +2731,7 @@ function apriModalRicezione(ordineId){
 }
 
 function _renderRicezioneModalBody(ordine, allForn, allProd, allNomi){
-  const tipoOpts=TIPOLOGIE.map(t=>`<option value="${h(t)}">${h(t)}</option>`).join("");
+  const tipoOpts=_tipoOptsHtml("");
   const ivaOpts=IVA_OPTIONS.map(v=>`<option value="${v}">${v}%</option>`).join("");
 
   const righeHtml=ricezioneModalData.righe.map(r=>`
@@ -2772,7 +2800,7 @@ function _addRicezioneRow(){
   if(!tbody) return;
   const allProd=[...new Set([...wines.map(w=>w.produttore)].filter(Boolean))].sort();
   const allNomi=[...new Set(wines.map(w=>w.nome).filter(Boolean))].sort();
-  const tipoOpts=TIPOLOGIE.map(t=>`<option value="${h(t)}">${h(t)}</option>`).join("");
+  const tipoOpts=_tipoOptsHtml("");
   const ivaOpts=IVA_OPTIONS.map(v=>`<option value="${v}">${v}%</option>`).join("");
   tbody.insertAdjacentHTML("beforeend",`
     <tr data-ric-id="${newR.id}" style="border-top:1px solid var(--border);background:rgba(120,53,15,.08)">
@@ -2780,7 +2808,7 @@ function _addRicezioneRow(){
         oninput="_ricRefChange('${newR.id}','produttore',this.value)" onchange="_ricRefAutofill('${newR.id}',this.value,'produttore')"></td>
       <td style="padding:5px 6px"><input class="form-input" style="font-size:11px" list="ric-wine-dl" autocomplete="off" placeholder="Nome vino"
         oninput="_ricRefChange('${newR.id}','nomeVino',this.value)" onchange="_ricRefAutofill('${newR.id}',this.value,'nomeVino')"></td>
-      <td style="padding:5px 6px"><select class="form-input" style="font-size:11px" onchange="_ricRefChange('${newR.id}','tipologia',this.value)">${tipoOpts}</select></td>
+      <td style="padding:5px 6px"><select class="form-input" style="font-size:11px" data-prev="Rosso" onchange="_addTipologiaInline(this,(v)=>_ricRefChange('${newR.id}','tipologia',v));if(this.value!=='__new__'){this.dataset.prev=this.value;_ricRefChange('${newR.id}','tipologia',this.value)}">${tipoOpts}</select></td>
       <td style="padding:5px 8px;text-align:center;color:var(--txt4);font-size:11px">—</td>
       <td style="padding:5px 6px"><input type="number" class="form-input" style="font-size:11px;text-align:center" value="0" min="0"
         oninput="_ricRefChange('${newR.id}','qtyArr',parseInt(this.value)||0);_aggiornaRicTotale()"></td>
@@ -2841,8 +2869,8 @@ function confermaRicezioneOrdine(){
     let wine=wines.find(w=>w.nome.toLowerCase()===r.nomeVino.toLowerCase());
     if(!wine){
       wine={id:uid(),nome:r.nomeVino,produttore:r.produttore||"",distributore:"",
-        annata:"",vitigni:"",tipologia:r.tipologia||"Bianco",regione:"",nazione:"Italia",zona:"",
-        prezzoAcq:r.prezzoAcq||0,iva:r.iva||22,prezzoCarta:0,giacenza:0,lots:[]};
+        annata:r.annata||"",vitigni:r.vitigni||"",tipologia:r.tipologia||"Bianco",regione:r.regione||"",nazione:r.nazione||"Italia",zona:r.zona||"",
+        prezzoAcq:r.prezzoAcq||0,iva:r.iva||22,prezzoCarta:r.prezzoCarta||0,giacenza:0,lots:[]};
       wines.push(wine);
     }
     const pAcq=parseFloat(r.prezzoAcq)||parseFloat(wine.prezzoAcq)||0;
@@ -2927,8 +2955,8 @@ function confermaRicezioneGlobale(){
       let wine=wines.find(w=>w.nome.toLowerCase()===r.nomeVino.toLowerCase());
       if(!wine){
         wine={id:uid(),nome:r.nomeVino,produttore:r.produttore||"",distributore:ordine.fornitore||"",
-          annata:"",vitigni:"",tipologia:r.tipologia||"Bianco",regione:"",nazione:"Italia",zona:"",
-          prezzoAcq:r.prezzoAcq||0,iva:r.iva||22,prezzoCarta:0,giacenza:0,lots:[]};
+          annata:r.annata||"",vitigni:r.vitigni||"",tipologia:r.tipologia||"Bianco",regione:r.regione||"",nazione:r.nazione||"Italia",zona:r.zona||"",
+          prezzoAcq:r.prezzoAcq||0,iva:r.iva||22,prezzoCarta:r.prezzoCarta||0,giacenza:0,lots:[]};
         wines.push(wine);
       }
       const pAcq=parseFloat(r.prezzoAcq)||parseFloat(wine.prezzoAcq)||0;
@@ -3103,7 +3131,7 @@ function renderModalBody(wine){
         <div><label class="form-label">Distributore</label><input class="form-input" id="mf-distributore" value="${h(f.distributore)}" placeholder="es. Vini Italiani Srl"></div>
         <div><label class="form-label">Annata</label><input class="form-input" id="mf-annata" value="${h(f.annata)}" placeholder="es. 2019 o N.V."></div>
         <div><label class="form-label">Vitigni</label><input class="form-input" id="mf-vitigni" value="${h(f.vitigni)}" placeholder="es. Nebbiolo 100%"></div>
-        <div><label class="form-label">Tipologia</label><select class="form-select" id="mf-tipologia">${TIPOLOGIE.map(t=>`<option ${f.tipologia===t?"selected":""}>${t}</option>`).join("")}</select></div>
+        <div><label class="form-label">Tipologia</label><select class="form-select" id="mf-tipologia" data-prev="${f.tipologia}" onchange="_addTipologiaInline(this);if(this.value!=='__new__'){this.dataset.prev=this.value}">${TIPOLOGIE.map(t=>`<option value="${t}" ${f.tipologia===t?"selected":""}>${t}</option>`).join("")+'<option value="__new__">+ Nuova tipologia…</option>'}</select></div>
       </div>
     </div>
     <div class="modal-section">
@@ -3286,7 +3314,7 @@ const _bulkFields={
     {key:"produttore",label:"Produttore",type:"text"},
     {key:"distributore",label:"Distributore",type:"text"},
     {key:"nome",label:"Nome Vino",type:"text"},
-    {key:"tipologia",label:"Tipologia",type:"select",opts:["Rosso","Bianco","Rosato","Spumante","Naturale","Dolce","Passito","Liquoroso","Orange"]},
+    {key:"tipologia",label:"Tipologia",type:"select",opts:[...TIPOLOGIE,"__new__"],labels:{...Object.fromEntries(TIPOLOGIE.map(t=>[t,t])),__new__:"+ Nuova tipologia…"}},
     {key:"annata",label:"Annata",type:"text"},
     {key:"regione",label:"Regione",type:"text"},
     {key:"nazione",label:"Nazione",type:"text"},
@@ -3443,11 +3471,6 @@ function exportMovimentiCSV(){
   notify("📥 Movimenti esportati");
 }
 // ─── MODALITÀ MOBILE ─────────────────────────────────────────────────────────
-let _mobQuery = "";
-let _mobLog = []; // [{ts, desc}]
-let _mobUndoData = null; // {wineId, delta, movId, prevGiacenza, prevLots}
-let _mobToastTimer = null;
-let _mobToastBarTimer = null;
 
 function _isMobile(){ return window.innerWidth < 600; }
 
