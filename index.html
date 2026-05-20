@@ -3804,7 +3804,7 @@ function importBackupJSON(event){
       if(data.orders) orders = data.orders;
       if(data.alertSoglie) alertSoglie = data.alertSoglie;
       scheduleSave();
-      renderSection(currentSection);
+      render();
       notify(`✅ Importati ${wines.length} vini`);
     } catch(err) {
       notify("❌ Errore: " + err.message, "err");
